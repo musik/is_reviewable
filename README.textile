@@ -22,21 +22,19 @@ h2. Installation
 
 *Gem:*
 
-<pre>sudo gem install is_reviewable</pre>
+Add in your Gemfile@:
 
-and in @config/environment.rb@:
-
-<pre>config.gem 'is_reviewable'</pre>
-
-*Plugin:*
-
-<pre>./script/plugin install git://github.com/grimen/is_reviewable.git</pre>
+<pre>gem 'is_reviewable'</pre>
 
 h2. Usage
 
 h3. 1. Generate migration:
 
-<pre>$ ./script/generate is_reviewable_migration</pre>
+<pre>$ rails g is_reviewable:install</pre>
+
+or
+
+<pre>$ rails generate is_reviewable:install</pre>
 
 Generates @db/migrations/{timestamp}_is_reviewable_migration@ with:
 

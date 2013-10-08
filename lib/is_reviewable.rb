@@ -1,38 +1,19 @@
-# coding: utf-8
-require File.join(File.dirname(__FILE__), *%w[is_reviewable review])
-require File.join(File.dirname(__FILE__), *%w[is_reviewable reviewable])
-require File.join(File.dirname(__FILE__), *%w[is_reviewable reviewer])
-require File.join(File.dirname(__FILE__), *%w[is_reviewable support])
+require 'active_support/dependencies'
 
 module IsReviewable
-  
-  extend self
-  
-  class IsReviewableError < ::StandardError
-    def initialize(message)
-      ::IsReviewable.log message, :debug
-      super message
-    end
+
+  # Our host application root path
+  # We set this when the engine is initialized
+  mattr_accessor :app_root
+  mattr_accessor :logger
+
+  # Yield self on setup for nice config blocks
+  def self.setup
+    yield self
   end
-  
-  InvalidConfigValueError = ::Class.new(IsReviewableError)
-  InvalidReviewerError = ::Class.new(IsReviewableError)
-  InvalidReviewValueError = ::Class.new(IsReviewableError)
-  RecordError = ::Class.new(IsReviewableError)
-  
-  mattr_accessor :verbose
-  
-  @@verbose = ::Object.const_defined?(:RAILS_ENV) ? (::RAILS_ENV.to_sym == :development) : true
-  
-  def log(message, level = :info)
-    return unless @@verbose
-    level = :info if level.blank?
-    @@logger ||= ::Logger.new(::STDOUT)
-    @@logger.send(level.to_sym, message)
-  end
-  
-  def root
-    @@root ||= File.expand_path(File.join(File.dirname(__FILE__), *%w[..]))
-  end
-  
+
 end
+
+require_relative 'is_reviewable/engine'
+require_relative 'is_reviewable/exceptions'
+require_relative 'is_reviewable/reviewable'
