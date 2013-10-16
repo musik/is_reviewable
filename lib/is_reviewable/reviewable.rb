@@ -14,16 +14,10 @@ module IsReviewable
       alias :is_reviewable? :reviewable?
     end
 
-    #ASSOCIATION_CLASS = ::Review
-    CACHABLE_FIELDS = [
-        :reviews_count,
-        :average_rating
-      ].freeze
     DEFAULTS = {
         :accept_ip => false,
         :scale => 1..5
       }.freeze
-
 
     module ClassMethods
 
@@ -86,11 +80,35 @@ module IsReviewable
         # Class definition
 
         has_many :reviews, as: :reviewable, dependent: :delete_all, class_name: Review.name
-          
-        # Polymorphic has-many-through not supported (has_many :reviewers, :through => :reviews), so:
-        # TODO: Implement with :join
-        def reviewers(*args)
-          Review.preload(:reviewer).on(self).collect! { |review| review.reviewer }
+
+        scope :reviewed, -> {
+          if reviewable_caching_field?(:average_rating) && reviewable_caching_field?(:total_reviews)
+            where("#{cached_attribute(:average_rating)} > ? AND #{cached_attribute(:total_reviews)} > ?", 0, 0)
+          else
+            joins(:reviews)
+          end
+        }
+
+        # TODO should not include not reviewed if have reviewable_caching_field?
+        scope :most_rated, -> {
+          if reviewable_caching_field?(:average_rating)
+            reviewed.order("#{cached_attribute(:average_rating)} DESC")
+          else
+            reviewed.group("#{table_name}.#{primary_key}").order('SUM(rating) DESC')
+          end
+        }
+
+        # TODO should not include not reviewed if have reviewable_caching_field?
+        scope :most_voted, -> {
+          if reviewable_caching_field?(:total_reviews)
+            reviewed.order("#{cached_attribute(:total_reviews)} DESC")
+          else
+            reviewed.group("#{table_name}.#{primary_key}").order('SUM(1) DESC')
+          end
+        }
+
+        def reviewers
+          Review.preload(:reviewer).on(self).collect(&:reviewer)
         end
 
         before_create :init_reviewable_caching_fields
@@ -126,8 +144,16 @@ module IsReviewable
         self.is_reviewable_options[:total_precision]
       end
       alias :rating_precision :reviewable_precision
-      
+
       protected
+
+      def reviewable_caching_field?(field)
+        attribute_method?(cached_attribute(field))
+      end
+
+      def cached_attribute(field)
+        "cached_#{field.to_s}"
+      end
         
       # Check if the requested reviewer object is a valid reviewer.
       #
@@ -177,8 +203,8 @@ module IsReviewable
       # Calculate average rating for this reviewable object.
       # 
       def average_rating(recalculate = false)
-        if !recalculate && self.reviewable_caching_fields?(:average_rating)
-          self.average_rating
+        if !recalculate && self.reviewable_caching_field?(:average_rating)
+          self.cached_average_rating
         else
           Review.on(self).with_a_rating.average(:rating).to_f.round(self.is_reviewable_options[:total_precision])
         end
@@ -195,8 +221,8 @@ module IsReviewable
       # Get the total number of reviews for this object.
       #
       def total_reviews(recalculate = false)
-        if !recalculate && self.reviewable_caching_fields?(:total_reviews)
-          self.total_reviews
+        if !recalculate && self.reviewable_caching_field?(:total_reviews)
+          self.cached_total_reviews
         else
           Review.on(self).count
         end
@@ -295,16 +321,16 @@ module IsReviewable
       # Update cache fields if available/enabled.
       #
       def update_cache!
-        if self.reviewable_caching_fields?(:total_reviews)
+        if self.reviewable_caching_field?(:total_reviews)
           # self.cached_total_reviews += 1 if review.new_record?
           self.cached_total_reviews = self.total_reviews(true)
         end
-        if self.reviewable_caching_fields?(:average_rating)
+        if self.reviewable_caching_field?(:average_rating)
           # new_rating = review.rating - (old_rating || 0)
           # self.cached_average_rating = (self.cached_average_rating + new_rating) / self.cached_total_reviews.to_f
           self.cached_average_rating = self.average_rating(true)
         end
-        self.save_without_validation if self.changed?
+        self.save(validate: false) if self.changed?
       end
 
       # Checks if a certain value is a valid rating value for this reviewable object.
@@ -315,25 +341,16 @@ module IsReviewable
       end
       alias :valid_rating_values? :valid_rating_value?
 
-      # Cachable fields for this reviewable class.
-      #
-      def reviewable_caching_fields
-        CACHABLE_FIELDS
-      end
-
       # Checks if there are any cached fields for this reviewable class.
-      #
-      def reviewable_caching_fields?(*fields)
-        fields = CACHABLE_FIELDS if fields.blank?
-        fields.all? { |field| self.attributes.has_key?(:"cached_#{field}") }
+      def reviewable_caching_field?(field)
+        self.class.send(:reviewable_caching_field?, field)
       end
-      alias :has_reviewable_caching_fields? :reviewable_caching_fields?
 
       # Initialize any cached fields.
       #
       def init_reviewable_caching_fields
-        self.cached_total_reviews = 0 if self.reviewable_caching_fields?(:cached_total_reviews)
-        self.cached_average_rating = 0.0 if self.reviewable_caching_fields?(:average_rating)
+        self.cached_total_reviews = 0 if self.reviewable_caching_field?(:total_reviews)
+        self.cached_average_rating = 0.0 if self.reviewable_caching_field?(:average_rating)
       end
 
       # Generate query conditions.
