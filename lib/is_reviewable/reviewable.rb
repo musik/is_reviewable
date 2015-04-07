@@ -82,8 +82,15 @@ module IsReviewable
         has_many :reviews, as: :reviewable, dependent: :delete_all, class_name: Review.name
 
         scope :reviewed, -> {
-          if reviewable_caching_field?(:average_rating) && reviewable_caching_field?(:total_reviews)
-            where("#{cached_attribute(:average_rating)} > ? AND #{cached_attribute(:total_reviews)} > ?", 0, 0)
+          if reviewable_caching_field?(:total_reviews)
+            where("#{cached_attribute(:total_reviews)} > ?", 0)
+          else
+            joins(:reviews)
+          end
+        }
+        scope :rated, -> {
+          if reviewable_caching_field?(:average_rating) && reviewable_caching_field?(:total_rates)
+            where("#{cached_attribute(:average_rating)} > ? AND #{cached_attribute(:total_rates)} > ?", 0, 0)
           else
             joins(:reviews)
           end
@@ -100,6 +107,13 @@ module IsReviewable
 
         # TODO should not include not reviewed if have reviewable_caching_field?
         scope :most_voted, -> {
+          if reviewable_caching_field?(:total_rates)
+            reviewed.order("#{cached_attribute(:total_rates)} DESC")
+          else
+            reviewed.group("#{table_name}.#{primary_key}").order('SUM(1) DESC')
+          end
+        }
+        scope :most_reviewed, -> {
           if reviewable_caching_field?(:total_reviews)
             reviewed.order("#{cached_attribute(:total_reviews)} DESC")
           else
@@ -218,16 +232,22 @@ module IsReviewable
           to_f.round(self.is_reviewable_options[:total_precision])
       end
       
-      # Get the total number of reviews for this object.
-      #
       def total_reviews(recalculate = false)
         if !recalculate && self.reviewable_caching_field?(:total_reviews)
           self.cached_total_reviews
         else
-          Review.on(self).count
+          Review.on(self).with_a_body.count
         end
       end
       alias :number_of_reviews :total_reviews
+      def total_rates(recalculate = false)
+        if !recalculate && self.reviewable_caching_field?(:total_rates)
+          self.cached_total_rates
+        else
+          Review.on(self).with_a_rating.count
+        end
+      end
+      alias :number_of_rates :total_rates
       
       # Is this object reviewed by anyone?
       #
@@ -325,6 +345,9 @@ module IsReviewable
           # self.cached_total_reviews += 1 if review.new_record?
           self.cached_total_reviews = self.total_reviews(true)
         end
+        if self.reviewable_caching_field?(:total_rates)
+          self.cached_total_rates = self.total_rates(true)
+        end
         if self.reviewable_caching_field?(:average_rating)
           # new_rating = review.rating - (old_rating || 0)
           # self.cached_average_rating = (self.cached_average_rating + new_rating) / self.cached_total_reviews.to_f
@@ -350,6 +373,7 @@ module IsReviewable
       #
       def init_reviewable_caching_fields
         self.cached_total_reviews = 0 if self.reviewable_caching_field?(:total_reviews)
+        self.cached_total_rates = 0 if self.reviewable_caching_field?(:total_rates)
         self.cached_average_rating = 0.0 if self.reviewable_caching_field?(:average_rating)
       end
 
