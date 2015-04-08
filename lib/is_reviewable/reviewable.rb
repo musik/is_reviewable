@@ -97,9 +97,9 @@ module IsReviewable
         }
 
         # TODO should not include not reviewed if have reviewable_caching_field?
-        scope :most_rated, -> {
+        scope :best_rated, -> {
           if reviewable_caching_field?(:average_rating)
-            reviewed.order("#{cached_attribute(:average_rating)} DESC")
+            rated.order("#{cached_attribute(:average_rating)} DESC")
           else
             reviewed.group("#{table_name}.#{primary_key}").order('SUM(rating) DESC')
           end
@@ -108,9 +108,9 @@ module IsReviewable
         # TODO should not include not reviewed if have reviewable_caching_field?
         scope :most_voted, -> {
           if reviewable_caching_field?(:total_rates)
-            reviewed.order("#{cached_attribute(:total_rates)} DESC")
+            rated.order("#{cached_attribute(:total_rates)} DESC")
           else
-            reviewed.group("#{table_name}.#{primary_key}").order('SUM(1) DESC')
+            rated.group("#{table_name}.#{primary_key}").order('SUM(1) DESC')
           end
         }
         scope :most_reviewed, -> {
