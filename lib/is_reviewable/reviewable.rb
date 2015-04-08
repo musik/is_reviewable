@@ -90,7 +90,7 @@ module IsReviewable
         }
         scope :rated, -> {
           if reviewable_caching_field?(:average_rating)
-            where("#{cached_attribute(:average_rating)} > ?", 0, 0)
+            where("#{cached_attribute(:average_rating)} > ?", 0)
           else
             joins(:reviews)
           end
