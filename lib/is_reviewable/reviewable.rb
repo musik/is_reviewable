@@ -89,8 +89,8 @@ module IsReviewable
           end
         }
         scope :rated, -> {
-          if reviewable_caching_field?(:average_rating) && reviewable_caching_field?(:total_rates)
-            where("#{cached_attribute(:average_rating)} > ? AND #{cached_attribute(:total_rates)} > ?", 0, 0)
+          if reviewable_caching_field?(:average_rating)
+            where("#{cached_attribute(:average_rating)} > ?", 0, 0)
           else
             joins(:reviews)
           end
